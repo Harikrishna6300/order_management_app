@@ -1,0 +1,36 @@
+{
+  "doctype": "DocType",
+  "name": "Item",
+  "module": "Order Management",
+  "custom": 1,
+  "fields": [
+    {
+      "fieldname": "item_name",
+      "label": "Item Name",
+      "fieldtype": "Data",
+      "reqd": 1,
+      "doctype": "DocField"
+    },
+    {
+      "fieldname": "price",
+      "label": "Price",
+      "fieldtype": "Currency",
+      "doctype": "DocField"
+    },
+    {
+      "fieldname": "stock_quantity",
+      "label": "Stock Quantity",
+      "fieldtype": "Int",
+      "doctype": "DocField"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ]
+}

@@ -246,4 +246,19 @@ app_license = "mit"
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
+# hooks.py
+doc_events = {
+    "Sales Order": {
+        "on_update": "order_management_app.events.sales_order_workflow_update"
+    }
+}
+doc_events = {
+    "Sales Order": {
+        "on_update": "order_management_app.api.sales_order_update"
+    }
+     }
 
+# List of patches to run during bench migrate
+patches = [
+    "order_management_app.patches.20260302_insert_sample_customers_items"
+]

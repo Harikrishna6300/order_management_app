@@ -1,4 +1,5 @@
 # order_management_app/api.py
+
 import frappe
 
 
@@ -8,31 +9,34 @@ import frappe
 @frappe.whitelist()
 def get_orders():
     """
-    Returns all confirmed Sales Orders with customer and items.
-    Sends confirmation email asynchronously if not sent yet.
+    Returns confirmed Sales Orders with customer and items.
+    Sends confirmation email asynchronously if not already sent.
     """
     try:
         response_data = []
 
-        # Fetch all confirmed orders
+        # Fetch submitted sales orders
         orders = frappe.get_all(
             "Sales Order",
-            filters={"status": "Confirmed"},
+            filters={"docstatus": 1},
             fields=[
                 "name",
                 "customer",
-                "order_date",
-                "total_amount",
+                "customer_name",
+                "transaction_date",
+                "grand_total",
                 "email_sent_on_confirmed",
             ],
         )
 
         for order in orders:
-            # Fetch customer details
-            customer = frappe.get_all(
+
+            # Fetch customer email
+            customer = frappe.get_value(
                 "Customer",
-                filters={"name": order.customer},
-                fields=["customer_name", "email_id"],
+                order.customer,
+                ["customer_name", "email_id"],
+                as_dict=True,
             )
 
             # Fetch order items
@@ -42,11 +46,11 @@ def get_orders():
                 fields=["item_code", "item_name", "qty", "rate", "amount"],
             )
 
-            # Enqueue email if not sent
+            # Send email if not sent
             if not order.email_sent_on_confirmed:
                 frappe.enqueue(
                     "order_management_app.tasks.send_email",
-                    queue="default",
+                    queue="short",
                     timeout=300,
                     order_name=order.name,
                 )
@@ -61,9 +65,9 @@ def get_orders():
             response_data.append(
                 {
                     "order_id": order.name,
-                    "order_date": order.order_date,
-                    "total_amount": order.total_amount,
-                    "customer": customer[0] if customer else {},
+                    "order_date": order.transaction_date,
+                    "total_amount": order.grand_total,
+                    "customer": customer or {},
                     "items": items,
                 }
             )
@@ -80,19 +84,21 @@ def get_orders():
 
 
 # =========================================================
-# Cached Item List API  ✅ (Caching Requirement)
+# Cached Item List API
 # =========================================================
 @frappe.whitelist()
 def get_cached_items():
     """
-    Cache frequently accessed Item list using frappe.cache().
+    Returns item list using Redis cache.
     First call -> Database
-    Next calls -> Cache (Redis)
+    Next calls -> Cache
     """
+
     try:
+
         cache_key = "order_management_item_list"
 
-        # 1️⃣ Check cache
+        # Check cache
         cached_items = frappe.cache().get_value(cache_key)
 
         if cached_items:
@@ -102,13 +108,13 @@ def get_cached_items():
                 "data": cached_items,
             }
 
-        # 2️⃣ Fetch from DB
+        # Fetch from database
         items = frappe.get_all(
             "Item",
-            fields=["name", "item_name", "price", "stock_quantity"],
+            fields=["name", "item_name", "stock_uom"],
         )
 
-        # 3️⃣ Store in cache (5 min expiry)
+        # Store in cache for 5 minutes
         frappe.cache().set_value(
             cache_key,
             items,
@@ -127,19 +133,34 @@ def get_cached_items():
 
 
 # =========================================================
-# Hook function for Sales Order update
+# Hook Function - Sales Order Confirmed
 # =========================================================
 def sales_order_update(doc, method):
     """
-    Triggered by doc_events on Sales Order update.
-    Sends confirmation email if status becomes 'Confirmed'.
+    Triggered when Sales Order is submitted.
+    Sends confirmation email to customer.
     """
 
-    if doc.status == "Confirmed" and not doc.email_sent_on_confirmed:
+    try:
 
+        # Check if email already sent
+        if doc.email_sent_on_confirmed:
+            return
+
+        # Get customer email
+        customer_email = frappe.db.get_value(
+            "Customer",
+            doc.customer,
+            "email_id"
+        )
+
+        if not customer_email:
+            return
+
+        # Send email in background
         frappe.enqueue(
             "order_management_app.tasks.send_email",
-            queue="default",
+            queue="short",
             timeout=300,
             order_name=doc.name,
         )
@@ -150,4 +171,10 @@ def sales_order_update(doc, method):
             doc.name,
             "email_sent_on_confirmed",
             1,
+        )
+
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            "Sales Order Email Error"
         )

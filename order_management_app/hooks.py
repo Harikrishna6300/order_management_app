@@ -249,14 +249,9 @@ app_license = "mit"
 # hooks.py
 doc_events = {
     "Sales Order": {
-        "on_update": "order_management_app.events.sales_order_workflow_update"
+        "on_submit": "order_management_app.api.sales_order_update"
     }
 }
-doc_events = {
-    "Sales Order": {
-        "on_update": "order_management_app.api.sales_order_update"
-    }
-     }
 
 # List of patches to run during bench migrate
 patches = [

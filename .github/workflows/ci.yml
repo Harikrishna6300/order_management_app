@@ -19,10 +19,15 @@ jobs:
         ports:
           - 3306:3306
 
-      redis:
+      redis-cache:
         image: redis:7
         ports:
-          - 6379:6379
+          - 13000:6379
+
+      redis-queue:
+        image: redis:7
+        ports:
+          - 11000:6379
 
     steps:
       - name: Checkout Repository
@@ -44,13 +49,23 @@ jobs:
 
       - name: Initialize Bench
         run: |
-          bench init frappe-bench --frappe-branch version-15 --skip-assets --python "$(which python)"
+          rm -rf frappe-bench
+          bench init frappe-bench \
+            --frappe-branch version-15 \
+            --skip-assets \
+            --skip-redis-config-generation \
+            --no-procfile \
+            --python "$(which python)"
 
       - name: Setup Site
         run: |
           cd frappe-bench
           bench get-app order_management_app $GITHUB_WORKSPACE
-          bench new-site test_site --admin-password admin --db-root-password root --mariadb-root-password root --no-mariadb-socket
+          bench new-site test_site \
+            --admin-password admin \
+            --db-root-password root \
+            --mariadb-root-password root \
+            --no-mariadb-socket
           bench --site test_site install-app order_management_app
 
       - name: Run Tests

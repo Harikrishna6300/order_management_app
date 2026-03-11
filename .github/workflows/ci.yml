@@ -1,58 +1,59 @@
 name: Frappe CI
 
 on:
-push:
-branches:
-- develop
-- main
-pull_request:
+  push:
+    branches:
+      - develop
+      - main
+  pull_request:
 
 jobs:
-test:
-runs-on: ubuntu-latest
-services:
-  mariadb:
-    image: mariadb:10.6
-    env:
-      MYSQL_ROOT_PASSWORD: root
-    ports:
-      - 3306:3306
+  test:
+    runs-on: ubuntu-latest
 
-  redis:
-    image: redis:7
-    ports:
-      - 6379:6379
+    services:
+      mariadb:
+        image: mariadb:10.6
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
 
-steps:
-  - name: Checkout Repository
-    uses: actions/checkout@v4
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
 
-  - name: Setup Python
-    uses: actions/setup-python@v4
-    with:
-      python-version: "3.11"
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-  - name: Install System Packages
-    run: |
-      sudo apt update
-      sudo apt install -y mariadb-client libmysqlclient-dev
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
 
-  - name: Install Bench
-    run: |
-      pip install frappe-bench
+      - name: Install System Packages
+        run: |
+          sudo apt update
+          sudo apt install -y mariadb-client libmysqlclient-dev
 
-  - name: Initialize Bench
-    run: |
-      bench init frappe-bench --frappe-branch version-15 --skip-assets --python "$(which python)"
+      - name: Install Bench
+        run: |
+          pip install frappe-bench
 
-  - name: Setup Site
-    run: |
-      cd frappe-bench
-      bench get-app order_management_app $GITHUB_WORKSPACE
-      bench new-site test_site --admin-password admin --db-root-password root --mariadb-root-password root --no-mariadb-socket
-      bench --site test_site install-app order_management_app
+      - name: Initialize Bench
+        run: |
+          bench init frappe-bench --frappe-branch version-15 --skip-assets --python "$(which python)"
 
-  - name: Run Tests
-    run: |
-      cd frappe-bench
-      bench --site test_site run-tests --app order_management_app
+      - name: Setup Site
+        run: |
+          cd frappe-bench
+          bench get-app order_management_app $GITHUB_WORKSPACE
+          bench new-site test_site --admin-password admin --db-root-password root --mariadb-root-password root --no-mariadb-socket
+          bench --site test_site install-app order_management_app
+
+      - name: Run Tests
+        run: |
+          cd frappe-bench
+          bench --site test_site run-tests --app order_management_app

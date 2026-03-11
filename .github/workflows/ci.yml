@@ -10,8 +10,6 @@ pull_request:
 jobs:
 test:
 runs-on: ubuntu-latest
-
-```
 services:
   mariadb:
     image: mariadb:10.6

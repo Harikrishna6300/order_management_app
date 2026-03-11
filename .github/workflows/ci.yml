@@ -20,45 +20,29 @@ services:
     ports:
       - 3306:3306
     options: >-
-      --health-cmd="mysqladmin ping --host=127.0.0.1 --password=root"
+      --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
       --health-interval=10s
       --health-timeout=5s
       --health-retries=3
 
-  redis-cache:
-    image: redis:alpine
+  redis:
+    image: redis:7
     ports:
       - 6379:6379
 
-  redis-queue:
-    image: redis:alpine
-    ports:
-      - 6380:6379
-
-  redis-socketio:
-    image: redis:alpine
-    ports:
-      - 6381:6379
-
 steps:
-  - name: Checkout Repository
+  - name: Checkout code
     uses: actions/checkout@v4
 
   - name: Setup Python
     uses: actions/setup-python@v4
     with:
-      python-version: "3.12"
+      python-version: "3.11"
 
-  - name: Install Dependencies
+  - name: Install System Dependencies
     run: |
       sudo apt update
-      sudo apt install -y \
-        mariadb-client \
-        libmysqlclient-dev \
-        build-essential \
-        redis-tools \
-        xvfb \
-        libfontconfig
+      sudo apt install -y mariadb-client libmysqlclient-dev
 
   - name: Install Bench
     run: |
@@ -66,15 +50,15 @@ steps:
 
   - name: Initialize Bench
     run: |
-      bench init --frappe-branch version-15 --skip-redis-config-generation --skip-assets --python "$(which python)" frappe-bench
+      bench init frappe-bench --frappe-branch version-15 --skip-assets --python "$(which python)"
 
-  - name: Setup Bench Environment
+  - name: Setup Site and Install App
     run: |
       cd frappe-bench
       bench get-app order_management_app $GITHUB_WORKSPACE
       bench new-site test_site \
-        --db-root-password root \
         --admin-password admin \
+        --db-root-password root \
         --mariadb-root-password root \
         --no-mariadb-socket
       bench --site test_site install-app order_management_app

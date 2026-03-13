@@ -12,34 +12,33 @@ def get_orders():
     Returns confirmed Sales Orders with customer and items.
     Sends confirmation email asynchronously if not already sent.
     """
+
     try:
         response_data = []
 
-        # Fetch submitted sales orders
         orders = frappe.get_all(
             "Sales Order",
             filters={"docstatus": 1},
             fields=[
                 "name",
                 "customer",
-                "customer_name",
-                "transaction_date",
-                "grand_total",
+                "order_date",
+                "total_amount",
                 "email_sent_on_confirmed",
             ],
         )
 
         for order in orders:
 
-            # Fetch customer email
+            # Fetch customer details
             customer = frappe.get_value(
                 "Customer",
                 order.customer,
-                ["customer_name", "email_id"],
+                ["customer_name", "email"],
                 as_dict=True,
             )
 
-            # Fetch order items
+            # Fetch items
             items = frappe.get_all(
                 "Sales Order Item",
                 filters={"parent": order.name},
@@ -48,6 +47,9 @@ def get_orders():
 
             # Send email if not sent
             if not order.email_sent_on_confirmed:
+
+                frappe.logger().info(f"Queueing email for order {order.name}")
+
                 frappe.enqueue(
                     "order_management_app.tasks.send_email",
                     queue="short",
@@ -65,8 +67,8 @@ def get_orders():
             response_data.append(
                 {
                     "order_id": order.name,
-                    "order_date": order.transaction_date,
-                    "total_amount": order.grand_total,
+                    "order_date": order.order_date,
+                    "total_amount": order.total_amount,
                     "customer": customer or {},
                     "items": items,
                 }
@@ -90,15 +92,11 @@ def get_orders():
 def get_cached_items():
     """
     Returns item list using Redis cache.
-    First call -> Database
-    Next calls -> Cache
     """
 
     try:
-
         cache_key = "order_management_item_list"
 
-        # Check cache
         cached_items = frappe.cache().get_value(cache_key)
 
         if cached_items:
@@ -108,13 +106,11 @@ def get_cached_items():
                 "data": cached_items,
             }
 
-        # Fetch from database
         items = frappe.get_all(
             "Item",
             fields=["name", "item_name", "stock_uom"],
         )
 
-        # Store in cache for 5 minutes
         frappe.cache().set_value(
             cache_key,
             items,
@@ -143,6 +139,8 @@ def sales_order_update(doc, method):
 
     try:
 
+        frappe.logger().info(f"Sales Order Hook Triggered for {doc.name}")
+
         # Check if email already sent
         if doc.email_sent_on_confirmed:
             return
@@ -151,13 +149,17 @@ def sales_order_update(doc, method):
         customer_email = frappe.db.get_value(
             "Customer",
             doc.customer,
-            "email_id"
+            "email"
         )
 
         if not customer_email:
+            frappe.log_error(
+                f"No email found for customer {doc.customer}",
+                "Order Management Email Error"
+            )
             return
 
-        # Send email in background
+        # Queue email job
         frappe.enqueue(
             "order_management_app.tasks.send_email",
             queue="short",
@@ -165,7 +167,9 @@ def sales_order_update(doc, method):
             order_name=doc.name,
         )
 
-        # Mark email as sent
+        frappe.logger().info(f"Email queued for order {doc.name}")
+
+        # Mark email sent
         frappe.db.set_value(
             "Sales Order",
             doc.name,

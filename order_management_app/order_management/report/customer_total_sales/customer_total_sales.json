@@ -4,7 +4,7 @@
  "ref_doctype": "Sales Order",
  "report_type": "Script Report",
  "is_standard": "Yes",
- "module": "Order management",
+ "module": "Order Management",
  "filters": [
   {
    "fieldname": "from_date",
